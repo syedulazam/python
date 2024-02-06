@@ -5,10 +5,26 @@ import threading
 import queue
 import pickle
 
+############################ sklearn model ############################
+
 from sklearn.ensemble import RandomForestClassifier
 
 # Define a simple classifier (you should train it on labeled data in a real scenario)
 classifier = RandomForestClassifier()
+
+############################
+
+############################ transformers  model ############################
+
+import torch
+from transformers import Wav2Vec2ForSequenceClassification, Wav2Vec2Tokenizer
+
+# Load pre-trained transformer model and tokenizer
+model_name = "facebook/wav2vec2-base-960h"
+tokenizer = Wav2Vec2Tokenizer.from_pretrained(model_name)
+model = Wav2Vec2ForSequenceClassification.from_pretrained(model_name)
+
+############################
 
 ########### PARAMETERS ###########
 # DO NOT MODIFY
@@ -16,8 +32,6 @@ classifier = RandomForestClassifier()
 sample_rate = 16000
 # Frame length
 frame_length = 512
-
-
 
 ########### AUDIO FILE ###########
 # DO NOT MODIFY
@@ -63,26 +77,39 @@ def emit_data():
         notice_send_samples(list_samples_id)
     print('Stop emitting')
 
+def extract_audio_features(frame):
+    # Extract MFCC features (you might need to adjust parameters based on your data)
+    mfcc_features = librosa.feature.mfcc(y=frame, sr=sample_rate, n_mfcc=13)
+    return mfcc_features
+
 def process_data():
     i = 0
     start_event.wait()
     print('Start processing')
-
     while i != number_of_frames:
         frame = buffer.get()
 
         ### TODO: YOUR CODE
-        # MODIFY
-        list_samples_id = np.arange(i * frame_length, (i + 1) * frame_length)
+        # Modify the feature extraction based on your needs
+        features = extract_audio_features(frame)
 
-        # Assuming a simple condition for illustration, you should train a model on labeled data
-        # Modify this part based on your actual model
-        if np.max(np.abs(frame)) > 1000:  # Replace this condition with your actual model prediction
-            labels = np.zeros(len(list_samples_id))
-        else:
-            labels = np.ones(len(list_samples_id))
+        # Convert the features to text using the transformer's tokenizer
+        input_text = tokenizer.batch_encode_plus(
+            features.tolist(),
+            padding=True,
+            return_tensors="pt"
+        )["input_values"]
+
+        # Forward pass through the transformer model
+        with torch.no_grad():
+            logits = model(input_text).logits
+
+        # Assuming binary classification, convert logits to probabilities
+        probabilities = torch.softmax(logits, dim=1)
+        labels = (probabilities[:, 0] > 0.5).long().numpy()
         ###
 
+        list_samples_id = np.arange(i*frame_length, (i+1)*frame_length)
         label_samples(list_samples_id, labels)
         i += 1
 
