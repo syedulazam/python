@@ -62,6 +62,7 @@ results = np.zeros(shape=(3, len(audio_data_int16)), dtype=np.int64)
 buffer = queue.Queue()
 start_event = threading.Event()
 
+
 def label_samples(list_samples_id, labels):
     receive_time = time.time_ns()
     results[1][list_samples_id] = labels
@@ -94,6 +95,10 @@ def emit_data():
         notice_send_samples(list_samples_id)
     print('Stop emitting')
 
+# Load the labeled dataset
+with open('label_samples.pkl', 'rb') as file:
+    labeled_samples = pickle.load(file)
+
 def process_data():
     i = 0
     start_event.wait()
@@ -108,16 +113,18 @@ def process_data():
     while i != number_of_frames:
         frame = buffer.get()
 
-        ### TODO: YOUR CODE
-        # Modify the feature extraction based on your needs
+        # Extract features or preprocess the frame as needed
         features = frame.reshape((1, frame_length))
 
-        # Convert features to predictions using the trained model
-        predictions = model.predict(features)
+        # Retrieve the label from the loaded dataset
+        labels = labeled_samples[i][1]
 
         # Assuming binary classification
+        # Convert labels to predictions using the trained model
+        predictions = model.predict(features)
+
+        # Update the labels based on predictions
         labels = (predictions > 0.5).astype(np.int)
-        ###
 
         list_samples_id = np.arange(i*frame_length, (i+1)*frame_length)
         label_samples(list_samples_id, labels)
