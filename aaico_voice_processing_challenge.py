@@ -26,6 +26,13 @@ model = Wav2Vec2ForSequenceClassification.from_pretrained(model_name)
 
 ############################
 
+############################ Keras sequential model #########################
+
+from keras.models import Sequential
+from keras.layers import Dense, Flatten, Dropout, BatchNormalization
+
+############################
+
 ########### PARAMETERS ###########
 # DO NOT MODIFY
 # Desired sample rate 16000 Hz
@@ -48,11 +55,10 @@ number_of_frames = len(audio_data_int16) // frame_length
 audio_data_int16 = audio_data_int16[:number_of_frames * frame_length]
 audio_duration = len(audio_data_int16) / sample_rate
 
-
 ########### STREAMING SIMULATION ###########
 # DO NOT MODIFY
 results = np.zeros(shape=(3, len(audio_data_int16)), dtype=np.int64)
-# Detection mask lines are SENT TIME, LABEL, RECEIVE TIME. 
+# Detection mask lines are SENT TIME, LABEL, RECEIVE TIME.
 buffer = queue.Queue()
 start_event = threading.Event()
 
@@ -65,7 +71,18 @@ def notice_send_samples(list_samples_id):
     send_time = time.time_ns()
     results[0][list_samples_id] = send_time
 
-def emit_data(): 
+def build_model(input_shape):
+    model = Sequential([
+        Flatten(input_shape=input_shape),
+        Dense(128, activation='relu'),
+        BatchNormalization(),
+        Dropout(0.5),
+        Dense(1, activation='sigmoid')
+    ])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+
+def emit_data():
     time.sleep(.5)
     print('Start emitting')
     start_event.set()
@@ -77,36 +94,29 @@ def emit_data():
         notice_send_samples(list_samples_id)
     print('Stop emitting')
 
-def extract_audio_features(frame):
-    # Extract MFCC features (you might need to adjust parameters based on your data)
-    mfcc_features = librosa.feature.mfcc(y=frame, sr=sample_rate, n_mfcc=13)
-    return mfcc_features
-
 def process_data():
     i = 0
     start_event.wait()
     print('Start processing')
+
+    # Feature shape for the neural network
+    input_shape = (number_of_frames, frame_length)
+
+    # Build and compile the model
+    model = build_model(input_shape)
+
     while i != number_of_frames:
         frame = buffer.get()
 
         ### TODO: YOUR CODE
         # Modify the feature extraction based on your needs
-        features = extract_audio_features(frame)
+        features = frame.reshape((1, frame_length))
 
-        # Convert the features to text using the transformer's tokenizer
-        input_text = tokenizer.batch_encode_plus(
-            features.tolist(),
-            padding=True,
-            return_tensors="pt"
-        )["input_values"]
+        # Convert features to predictions using the trained model
+        predictions = model.predict(features)
 
-        # Forward pass through the transformer model
-        with torch.no_grad():
-            logits = model(input_text).logits
-
-        # Assuming binary classification, convert logits to probabilities
-        probabilities = torch.softmax(logits, dim=1)
-        labels = (probabilities[:, 0] > 0.5).long().numpy()
+        # Assuming binary classification
+        labels = (predictions > 0.5).astype(np.int)
         ###
 
         list_samples_id = np.arange(i*frame_length, (i+1)*frame_length)
@@ -118,7 +128,6 @@ def process_data():
     # Save the list to a file
     with open('results.pkl', 'wb') as file:
         pickle.dump(results, file)
-
 
 if __name__ == "__main__":
     time_measurement = []
