@@ -6,7 +6,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 import pickle
 
 def load_labeled_data():
-    # Load your labeled dataset (replace this with your actual loading mechanism)
+    # Load your labeled dataset (replace this with yo   ur actual loading mechanism)
     with open('label_samples.pkl', 'rb') as file:
         labeled_samples = pickle.load(file)
 

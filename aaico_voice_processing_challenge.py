@@ -116,21 +116,23 @@ def process_data():
         # Extract features or preprocess the frame as needed
         features = frame.reshape((1, frame_length))
 
-        # Retrieve the label from the loaded dataset
-        labels = labeled_samples[i][1]
+        # Convert features to predictions using the trained model
+        inputs = tokenizer(features.tolist(), return_tensors="pt", padding="max_length", truncation=True, max_length=frame_length, stride=frame_length, sampling_rate=sample_rate)
+        outputs = model(**inputs)
+        predictions = outputs.logits
 
         # Assuming binary classification
-        # Convert labels to predictions using the trained model
-        predictions = model.predict(features)
-
-        # Update the labels based on predictions
-        labels = (predictions > 0.5).astype(np.int)
+        labels = (predictions > 0).astype(np.int)
 
         list_samples_id = np.arange(i*frame_length, (i+1)*frame_length)
         label_samples(list_samples_id, labels)
         i += 1
 
     print('Stop processing')
+
+    # Save the list to a file
+    with open('results.pkl', 'wb') as file:
+        pickle.dump(results, file)
 
     # Save the list to a file
     with open('results.pkl', 'wb') as file:
